@@ -1,0 +1,42 @@
+:@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --brand-primary: #1E3A8A;
+    --brand-secondary: #2563EB;
+    --text-primary: #111827;
+    --text-secondary: #64748B;
+    --border-color: #E2E8F0;
+  }
+
+  .dark {
+    --bg-primary: #0B1120;
+    --bg-secondary: #111827;
+    --bg-card: #172033;
+    --brand-primary: #3B82F6;
+    --brand-secondary: #2563EB;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --border-color: #263449;
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] transition-theme duration-300 ease-in-out antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom Scrollbar for Premium Feel */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+/* Hide scrollbar for carousel */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

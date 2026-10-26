@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: elevatex
+      POSTGRES_PASSWORD: local_only_change_me
+      POSTGRES_DB: elevatex
+    ports: ["5432:5432"]
+    volumes: ["elevatex_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elevatex -d elevatex"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["elevatex_redis:/data"]
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: local-minio-user
+      MINIO_ROOT_PASSWORD: local-minio-password-change-me
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["elevatex_minio:/data"]
+volumes:
+  elevatex_pg:
+  elevatex_redis:
+  elevatex_minio:

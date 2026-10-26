@@ -1,0 +1,464 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ELEVATEX_DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  NEEDS_INFO
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                   String                    @id @default(cuid())
+  email                String                    @unique
+  name                 String
+  passwordHash         String
+  emailVerified        Boolean                   @default(false)
+  role                 UserRole                  @default(USER)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  disabledAt           DateTime?
+  sessions             Session[]
+  verificationTokens   EmailVerificationToken[]
+  passwordResetTokens  PasswordResetToken[]
+  investor             InvestorProfile?
+  founder              FounderProfile?
+  startups             Startup[]                 @relation("FounderStartups")
+  notifications        Notification[]
+  auditLogs            AuditLog[]                @relation("AuditActor")
+  ownedDocuments       Document[]                @relation("DocumentOwner")
+  grantedDocuments     DocumentGrant[]           @relation("DocumentGrantee")
+  documentEvents       DocumentEvent[]           @relation("DocumentActor")
+  verificationReviews  VerificationReview[]      @relation("ReviewReviewer")
+  conversationLinks    ConversationParticipant[] @relation("ConversationParticipants")
+  sentMessages         Message[]                 @relation("MessageSender")
+  createdMeetings      Meeting[]                 @relation("MeetingCreator")
+  meetingLinks         MeetingParticipant[]      @relation("MeetingParticipants")
+  requestedConnections Connection[]              @relation("ConnectionRequester")
+  receivedConnections  Connection[]              @relation("ConnectionRecipient")
+  aiConversations      AiConversation[]
+  forecastShares       FinancialShare[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique // SHA-256 hash of the opaque cookie token; never store the raw secret.
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model InvestorProfile {
+  id           String                @id @default(cuid())
+  userId       String                @unique
+  thesis       String?
+  category     String?
+  data         Json?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications InvestorApplication[]
+  preferences  Preference[]
+  watchlist    WatchlistEntry[]
+  interests    InterestRequest[]
+}
+
+model FounderProfile {
+  id           String               @id @default(cuid())
+  userId       String               @unique
+  data         Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications FounderApplication[]
+}
+
+model Startup {
+  id               String                @id @default(cuid())
+  slug             String                @unique
+  name             String
+  tagline          String?
+  industry         String
+  stage            String?
+  businessModel    String?
+  description      String?
+  location         String?
+  isDemo           Boolean               @default(false)
+  publicApproved   Boolean               @default(false)
+  founderId        String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  founder          User?                 @relation("FounderStartups", fields: [founderId], references: [id], onDelete: SetNull)
+  interests        InterestRequest[]
+  watchlistEntries WatchlistEntry[]
+  financialRecords FinancialRecord[]
+  assumptions      FinancialAssumption[]
+  scenarios        FinancialScenario[]
+
+  @@index([publicApproved, industry])
+  @@index([founderId, createdAt])
+}
+
+model InvestorApplication {
+  id          String            @id @default(cuid())
+  investorId  String
+  status      ApplicationStatus @default(DRAFT)
+  data        Json
+  submittedAt DateTime?
+  reviewNote  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  investor    InvestorProfile   @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@index([investorId, status, updatedAt])
+}
+
+model FounderApplication {
+  id          String            @id @default(cuid())
+  founderId   String
+  status      ApplicationStatus @default(DRAFT)
+  data        Json
+  submittedAt DateTime?
+  reviewNote  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  founder     FounderProfile    @relation(fields: [founderId], references: [id], onDelete: Cascade)
+
+  @@index([founderId, status, updatedAt])
+}
+
+model ApplicationHistory {
+  id              String   @id @default(cuid())
+  applicationType String
+  applicationId   String
+  fromStatus      String?
+  toStatus        String
+  actorId         String?
+  note            String?
+  createdAt       DateTime @default(now())
+
+  @@index([applicationType, applicationId, createdAt])
+}
+
+model Document {
+  id           String          @id @default(cuid())
+  ownerId      String
+  documentType String
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  contentHash  String
+  storageKey   String          @unique
+  status       String          @default("UPLOADING")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  owner        User            @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  grants       DocumentGrant[]
+  events       DocumentEvent[]
+
+  @@index([ownerId, documentType, createdAt])
+}
+
+model DocumentGrant {
+  id         String   @id @default(cuid())
+  documentId String
+  granteeId  String
+  permission String
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  grantee    User     @relation("DocumentGrantee", fields: [granteeId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, granteeId])
+  @@index([granteeId, createdAt])
+}
+
+model DocumentEvent {
+  id         String   @id @default(cuid())
+  documentId String
+  actorId    String
+  event      String
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor      User     @relation("DocumentActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt])
+}
+
+model VerificationReview {
+  id          String   @id @default(cuid())
+  subjectType String
+  subjectId   String
+  reviewerId  String
+  status      String
+  note        String?
+  createdAt   DateTime @default(now())
+  reviewer    User     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([subjectType, subjectId, createdAt])
+}
+
+model Preference {
+  id         String          @id @default(cuid())
+  investorId String
+  key        String
+  value      Json
+  investor   InvestorProfile @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, key])
+}
+
+model WatchlistEntry {
+  id         String          @id @default(cuid())
+  investorId String
+  startupId  String
+  createdAt  DateTime        @default(now())
+  investor   InvestorProfile @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  startup    Startup         @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, startupId])
+  @@index([startupId, createdAt])
+}
+
+model InterestRequest {
+  id         String          @id @default(cuid())
+  investorId String
+  startupId  String
+  status     String          @default("PENDING")
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  investor   InvestorProfile @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  startup    Startup         @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, startupId])
+  @@index([startupId, status])
+}
+
+model Connection {
+  id          String   @id @default(cuid())
+  requesterId String
+  recipientId String
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  requester   User     @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("ConnectionRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, recipientId])
+  @@index([recipientId, status])
+}
+
+model Conversation {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now())
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation("ConversationParticipants", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, joinedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime     @default(now())
+  readAt         DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, senderId, readAt])
+}
+
+model Meeting {
+  id        String               @id @default(cuid())
+  creatorId String
+  title     String
+  startsAt  DateTime
+  endsAt    DateTime
+  timezone  String               @default("UTC")
+  status    String               @default("PROPOSED")
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  creator   User                 @relation("MeetingCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members   MeetingParticipant[]
+
+  @@index([startsAt, status])
+}
+
+model MeetingParticipant {
+  id        String  @id @default(cuid())
+  meetingId String
+  userId    String
+  status    String  @default("INVITED")
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User    @relation("MeetingParticipants", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([userId, status])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AiConversation {
+  id        String      @id @default(cuid())
+  userId    String?
+  role      String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages  AiMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model FinancialRecord {
+  id        String   @id @default(cuid())
+  startupId String
+  period    String
+  kind      String
+  amount    Decimal  @db.Decimal(18, 2)
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, period, kind])
+  @@index([startupId, period])
+}
+
+model FinancialAssumption {
+  id        String   @id @default(cuid())
+  startupId String
+  name      String
+  value     Decimal  @db.Decimal(18, 4)
+  unit      String
+  createdAt DateTime @default(now())
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, name])
+}
+
+model FinancialScenario {
+  id            String            @id @default(cuid())
+  startupId     String
+  name          String
+  engineVersion Int               @default(1)
+  assumptions   Json
+  result        Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  startup       Startup           @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  results       FinancialResult[]
+  shares        FinancialShare[]
+
+  @@index([startupId, createdAt])
+}
+
+model FinancialResult {
+  id         String            @id @default(cuid())
+  scenarioId String
+  month      Int
+  revenue    Decimal           @db.Decimal(18, 2)
+  expenses   Decimal           @db.Decimal(18, 2)
+  cash       Decimal           @db.Decimal(18, 2)
+  createdAt  DateTime          @default(now())
+  scenario   FinancialScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, month])
+}
+
+model FinancialShare {
+  id         String            @id @default(cuid())
+  scenarioId String
+  userId     String
+  permission String
+  createdAt  DateTime          @default(now())
+  scenario   FinancialScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, userId])
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}
